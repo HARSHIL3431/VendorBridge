@@ -1,0 +1,173 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  PROCUREMENT_OFFICER
+  MANAGER
+  VENDOR
+}
+
+enum RfqStatus {
+  OPEN
+  CLOSED
+  AWARDED
+}
+
+enum QuotationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum ApprovalStatus {
+  APPROVED
+  REJECTED
+}
+
+enum PoStatus {
+  ISSUED
+  DELIVERED
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  PENDING
+  SENT
+  PAID
+}
+
+enum VendorStatus {
+  ACTIVE
+  INACTIVE
+  BLACKLISTED
+}
+
+// ─── Models ──────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quotations Quotation[]
+  approvals  Approval[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model Vendor {
+  id        String       @id @default(uuid())
+  name      String
+  email     String       @unique
+  phone     String
+  gstNumber String
+  category  String
+  status    VendorStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  quotations Quotation[]
+
+  @@index([email])
+  @@index([status])
+  @@index([category])
+}
+
+model Rfq {
+  id          String    @id @default(uuid())
+  title       String
+  description String
+  quantity    Int
+  deadline    DateTime
+  status      RfqStatus @default(OPEN)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  quotations Quotation[]
+
+  @@index([status])
+}
+
+model Quotation {
+  id           String          @id @default(uuid())
+  rfqId        String
+  vendorId     String
+  userId       String
+  price        Float
+  deliveryDays Int
+  notes        String?
+  status       QuotationStatus @default(PENDING)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  rfq    Rfq    @relation(fields: [rfqId], references: [id])
+  vendor Vendor @relation(fields: [vendorId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  approval      Approval?
+  purchaseOrder PurchaseOrder?
+
+  @@unique([rfqId, vendorId])
+  @@index([rfqId])
+  @@index([vendorId])
+  @@index([userId])
+}
+
+model Approval {
+  id           String         @id @default(uuid())
+  quotationId  String         @unique
+  status       ApprovalStatus
+  remarks      String?
+  approvedById String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  quotation  Quotation @relation(fields: [quotationId], references: [id])
+  approvedBy User      @relation(fields: [approvedById], references: [id])
+
+  @@index([approvedById])
+}
+
+model PurchaseOrder {
+  id           String   @id @default(uuid())
+  poNumber     String   @unique
+  quotationId  String   @unique
+  status       PoStatus @default(ISSUED)
+  deliveryDate DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  quotation Quotation @relation(fields: [quotationId], references: [id])
+  invoice   Invoice?
+}
+
+model Invoice {
+  id              String        @id @default(uuid())
+  invoiceNumber   String        @unique
+  purchaseOrderId String        @unique
+  subtotal        Float
+  tax             Float
+  total           Float
+  status          InvoiceStatus @default(PENDING)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+}
